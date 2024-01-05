@@ -17,6 +17,8 @@ target_include_directories(hashmap PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 # Tests
 option(BUILD_TESTS "Build tests" ON)
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
+
 if(BUILD_TESTS)
     add_executable(hashmap_tests tests/hashmap_tests.c)
     target_link_libraries(hashmap_tests PRIVATE hashmap)

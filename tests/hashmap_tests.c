@@ -33,7 +33,7 @@ static void test_free(void *ptr) {
 
 
 
-#define bench(name, N, code) {{ \
+#define bench(name, N, code) do { \
     if (strlen(name) > 0) { \
         printf("%-14s ", name); \
     } \
@@ -41,7 +41,7 @@ static void test_free(void *ptr) {
     size_t tallocs = total_allocs; \
     clock_t begin = clock(); \
     for (int i = 0; i < N; i++) { \
-        (code); \
+        code; \
     } \
     clock_t end = clock(); \
     double elapsed_secs = (double)(end - begin) / CLOCKS_PER_SEC; \
@@ -60,7 +60,7 @@ static void test_free(void *ptr) {
         printf(", %.2f allocs", (double)used_allocs); \
     } \
     printf("\n"); \
-}}
+} while(0);
 
 static void benchmarks() {
     int seed = getenv("SEED")?atoi(getenv("SEED")):time(NULL);
