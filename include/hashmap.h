@@ -22,6 +22,9 @@ struct hashmap_create_options {
 
     // Optional: The hash function to use. If NULL, this will default to using Murmur3.
     uint64_t (*hash)(const void *key, size_t len, uint64_t seed1, uint64_t seed2);
+
+    void *(*custom_malloc)(size_t size);
+    void (*custom_free)(void *ptr);
 };
 
 struct hashmap;

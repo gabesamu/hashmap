@@ -1,32 +1,33 @@
-#include <stdio.h>
-#include <assert.h>
-
-#include "../src/hashmap.c"
-
-
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <assert.h>
 #include <stdio.h>
 
+// #define HASHMAP_KEY_SIZE 10
+#include "../src/hashmap.c"
+
+
+
 static uintptr_t total_allocs = 0;
 static uintptr_t total_mem = 0;
+static uintptr_t live_allocs = 0;
 
-static void *xmalloc(size_t size) {
+static void *test_malloc(size_t size) {
     void *mem = malloc(sizeof(uintptr_t)+size);
     assert(mem);
     *(uintptr_t*)mem = size;
     total_allocs++;
+    live_allocs++;
     total_mem += size;
     return (char*)mem+sizeof(uintptr_t);
 }
 
-static void xfree(void *ptr) {
+static void test_free(void *ptr) {
     if (ptr) {
         total_mem -= *(uintptr_t*)((char*)ptr-sizeof(uintptr_t));
         free((char*)ptr-sizeof(uintptr_t));
-        total_allocs--;
+        live_allocs--;
     }
 }
 
@@ -38,54 +39,45 @@ static void xfree(void *ptr) {
     } \
     size_t tmem = total_mem; \
     size_t tallocs = total_allocs; \
-    uint64_t bytes = 0; \
     clock_t begin = clock(); \
     for (int i = 0; i < N; i++) { \
         (code); \
     } \
     clock_t end = clock(); \
     double elapsed_secs = (double)(end - begin) / CLOCKS_PER_SEC; \
-    double bytes_sec = (double)bytes/elapsed_secs; \
     printf("%d ops in %.3f secs, %.0f ns/op, %.0f op/sec", \
         N, elapsed_secs, \
         elapsed_secs/(double)N*1e9, \
         (double)N/elapsed_secs \
     ); \
-    if (bytes > 0) { \
-        printf(", %.1f GB/sec", bytes_sec/1024/1024/1024); \
-    } \
+    printf(", size: %lu Kb", total_mem/1024); \
     if (total_mem > tmem) { \
         size_t used_mem = total_mem-tmem; \
         printf(", %.2f bytes/op", (double)used_mem/N); \
     } \
     if (total_allocs > tallocs) { \
         size_t used_allocs = total_allocs-tallocs; \
-        printf(", %.2f allocs/op", (double)used_allocs/N); \
+        printf(", %.2f allocs", (double)used_allocs); \
     } \
     printf("\n"); \
 }}
 
 static void benchmarks() {
     int seed = getenv("SEED")?atoi(getenv("SEED")):time(NULL);
-    int N = 10000;
-    printf("seed=%d, count=%d, item_size=%zu\n", seed, N, sizeof(int));
+    int N = 1000000;
     srand(seed);
 
-
     struct key_value_pairs{
-        char key[6];
+        char key[10];
         int value;
     };
 
-    struct key_value_pairs *pairs = xmalloc(sizeof(struct key_value_pairs)*N);
+    struct key_value_pairs *pairs = test_malloc(sizeof(struct key_value_pairs)*N);
 
     for (int i = 0; i < N; i++) {
         sprintf(pairs[i].key, "%d", i);
-        printf("pairs[i].key=%s\n", pairs[i].key);
         pairs[i].value = i;
     }
-
-    printf("sizeof(struct key_value_pairs)=%zu\n", sizeof(struct key_value_pairs));
 
     struct hashmap *map;
 
@@ -93,7 +85,9 @@ static void benchmarks() {
         .value_size = sizeof(int),
         .capacity = 0,
         .hash = NULL,
-        .value_free = NULL
+        .value_free = NULL,
+        .custom_malloc = test_malloc,
+        .custom_free = test_free
     };
     map = hashmap_create(&options);
     // benchmark ops with default capacity
@@ -127,142 +121,20 @@ static void benchmarks() {
         assert(res == true);
     })
 
-
     hashmap_free(map);
 
-    xfree(pairs);
+    test_free(pairs);
 
-    if (total_allocs != 0) {
-        fprintf(stderr, "total_allocs: expected 0, got %lu\n", total_allocs);
+    if (live_allocs != 0) {
+        fprintf(stderr, "live_allocs: expected 0, got %lu\n", live_allocs);
         exit(1);
     }
 }
 
 
 
-// void test_insert_retrieve() {
-//     struct hashmap_create_options options = {
-//         .value_size = sizeof(int),
-//         .capacity = HASHMAP_DEFAULT_CAPACITY,
-//         .hash = NULL,
-//         .value_free = NULL
-//     };
-//     struct hashmap *map = hashmap_create(&options);
-
-//     // Check map creation
-//     assert(map != NULL);
-//     assert(hashmap_count(map) == 0);
-
-//     // Insert key-value pairs
-//     int values[10];
-//     for (int i = 0; i < 10; i++) {
-//         values[i] = i;
-//         char key[20];
-//         snprintf(key, 20, "key%d", i);
-//         assert(hashmap_set(map, key, &values[i]));
-//     }
-
-//     // Check retrieval
-//     for (int i = 0; i < 10; i++) {
-//         char key[20];
-//         snprintf(key, 20, "key%d", i);
-//         const int *retrieved_value = (const int *)hashmap_get(map, key);
-//         assert(retrieved_value != NULL);
-//         assert(*retrieved_value == i);
-//     }
-
-//     hashmap_free(map);
-// }
-
-// void test_remove() {
-//     struct hashmap_create_options options = {
-//         .value_size = sizeof(int),
-//         .capacity = HASHMAP_DEFAULT_CAPACITY,
-//         .hash = NULL,
-//         .value_free = NULL
-//     };
-//     struct hashmap *map = hashmap_create(&options);
-
-//     // Check map creation
-//     assert(map != NULL);
-//     assert(hashmap_count(map) == 0);
-
-//     // Insert key-value pairs
-//     int values[10];
-//     for (int i = 0; i < 10; i++) {
-//         values[i] = i;
-//         char key[20];
-//         snprintf(key, 20, "key%d", i);
-//         assert(hashmap_set(map, key, &values[i]));
-//     }
-
-//     // Check retrieval
-//     for (int i = 0; i < 10; i++) {
-//         char key[20];
-//         snprintf(key, 20, "key%d", i);
-//         const int *retrieved_value = (const int *)hashmap_get(map, key);
-//         assert(retrieved_value != NULL);
-//         assert(*retrieved_value == i);
-//     }
-
-//     // Remove key-value pairs
-//     for (int i = 0; i < 10; i++) {
-//         char key[20];
-//         snprintf(key, 20, "key%d", i);
-//         assert(hashmap_remove(map, key));
-//     }
-
-//     // Check retrieval
-//     for (int i = 0; i < 10; i++) {
-//         char key[20];
-//         snprintf(key, 20, "key%d", i);
-//         const int *retrieved_value = (const int *)hashmap_get(map, key);
-//         assert(retrieved_value == NULL);
-//     }
-
-//     hashmap_free(map);
-// }
-
-// void test_resize() {
-//     struct hashmap_create_options options = {
-//         .value_size = sizeof(int),
-//         .capacity = 1,
-//         .hash = NULL,
-//         .value_free = NULL
-//     };
-//     struct hashmap *map = hashmap_create(&options);
-
-//     // Check map creation
-//     assert(map != NULL);
-//     assert(hashmap_count(map) == 0);
-
-//     // Insert key-value pairs
-//     int values[10];
-//     for (int i = 0; i < 10; i++) {
-//         values[i] = i;
-//         char key[20];
-//         snprintf(key, 20, "key%d", i);
-//         assert(hashmap_set(map, key, &values[i]));
-//     }
-
-//     // Check retrieval
-//     for (int i = 0; i < 10; i++) {
-//         char key[20];
-//         snprintf(key, 20, "key%d", i);
-//         const int *retrieved_value = (const int *)hashmap_get(map, key);
-//         assert(retrieved_value != NULL);
-//         assert(*retrieved_value == i);
-//     }
-
-//     hashmap_free(map);
-// }
-
-
 int main() {
     printf("Running tests...\n");
-    // test_insert_retrieve();
-    // test_remove();
-    // test_resize();
     benchmarks();
     printf("All tests passed!\n");
     return 0;

@@ -14,9 +14,9 @@
 // warning: don't overallocate this value to avoid wasting memory
 #ifndef HASHMAP_KEY_SIZE
 #define HASHMAP_KEY_SIZE sizeof(char *)
-#elif HASHMAP_KEY_SIZE < sizeof(char *)
-#undef HASHMAP_KEY_SIZE
-#define HASHMAP_KEY_SIZE sizeof(char *)
+// #elif HASHMAP_KEY_SIZE < sizeof(char *)
+// #undef HASHMAP_KEY_SIZE
+// #define HASHMAP_KEY_SIZE sizeof(char *)
 #endif
 
 #ifndef HASHMAP_MAX_LOAD_FACTOR
@@ -32,6 +32,7 @@
 #define HASHMAP_DEFAULT_CAPACITY 32
 #endif
 
+
 struct bucket {
     uint64_t hash;
     uint16_t probe_len;
@@ -43,6 +44,8 @@ struct bucket {
 };
 
 struct hashmap {
+    void *(*malloc)(size_t size);
+    void (*free)(void *ptr);
     size_t value_size;
     size_t capacity;
     uint64_t seed1;
@@ -111,20 +114,29 @@ struct hashmap *hashmap_create(const struct hashmap_create_options *options) {
         bucket_size++;
     }
 
-    struct hashmap *map = malloc(sizeof(struct hashmap) + bucket_size*2);
+    struct hashmap *map;
+    if (options->custom_malloc) {
+        map = options->custom_malloc(sizeof(struct hashmap) + bucket_size*2);
+    }
+    else {
+        map = malloc(sizeof(struct hashmap) + bucket_size*2);
+    }
     if (!map) {
         return NULL;
     }
     memset(map, 0, sizeof(struct hashmap));
+
+    map->malloc = options->custom_malloc ? options->custom_malloc : malloc;
+    map->free = options->custom_free ? options->custom_free : free;
 
     size_t cap = HASHMAP_DEFAULT_CAPACITY;
     while (cap < options->capacity) {
         cap *= 2;
     }
 
-    map->buckets = malloc(bucket_size * cap);
+    map->buckets = map->malloc(bucket_size * cap);
     if (!map->buckets) {
-        free(map);
+        map->free(map);
         return NULL;
     }
     memset(map->buckets, 0, bucket_size * cap);
@@ -149,6 +161,8 @@ static bool resize(struct hashmap *map, size_t new_capacity) {
     struct hashmap_create_options options = {
         .value_size = map->value_size,
         .capacity = new_capacity,
+        .custom_malloc = map->malloc,
+        .custom_free = map->free,
     };
 
     struct hashmap *temp_map = hashmap_create(&options);
@@ -182,12 +196,12 @@ static bool resize(struct hashmap *map, size_t new_capacity) {
         }
     }
 
-    free(map->buckets);
+    map->free(map->buckets);
     map->buckets = temp_map->buckets;
     map->num_buckets = temp_map->num_buckets;
     map->grow_at = temp_map->grow_at;
     map->shrink_at = temp_map->shrink_at;
-    free(temp_map);
+    map->free(temp_map);
 
     return true;
 }
@@ -303,8 +317,8 @@ void hashmap_free(struct hashmap *map) {
         return;
     }
     free_values(map);
-    free(map->buckets);
-    free(map);
+    map->free(map->buckets);
+    map->free(map);
 }
 
 size_t hashmap_count(const struct hashmap *map) {
