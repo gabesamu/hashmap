@@ -30,16 +30,7 @@ static void xfree(void *ptr) {
     }
 }
 
-static void shuffle(void *array, size_t numels, size_t elsize) {
-    char tmp[elsize];
-    char *arr = array;
-    for (size_t i = 0; i < numels - 1; i++) {
-        int j = i + rand() / (RAND_MAX / (numels - i) + 1);
-        memcpy(tmp, arr + j * elsize, elsize);
-        memcpy(arr + j * elsize, arr + i * elsize, elsize);
-        memcpy(arr + i * elsize, tmp, elsize);
-    }
-}
+
 
 #define bench(name, N, code) {{ \
     if (strlen(name) > 0) { \
@@ -82,16 +73,15 @@ static void benchmarks() {
 
 
     struct key_value_pairs{
-        char *key;
+        char key[6];
         int value;
     };
 
     struct key_value_pairs *pairs = xmalloc(sizeof(struct key_value_pairs)*N);
 
     for (int i = 0; i < N; i++) {
-        pairs[i].key = xmalloc(2);
-        pairs[i].key[0] = i;
-        pairs[i].key[1] = '\0';
+        sprintf(pairs[i].key, "%d", i);
+        printf("pairs[i].key=%s\n", pairs[i].key);
         pairs[i].value = i;
     }
 
@@ -106,12 +96,11 @@ static void benchmarks() {
         .value_free = NULL
     };
     map = hashmap_create(&options);
-    shuffle(pairs, N, sizeof(struct key_value_pairs));
+    // benchmark ops with default capacity
     bench("set", N, {
         const bool res = hashmap_set(map, pairs[i].key, &pairs[i].value);
         assert(res == true);
     })
-    printf("sizeof(struct key_value_pairs)=%zu\n", sizeof(struct key_value_pairs));
     bench("get", N, {
         const int *v = hashmap_get(map, pairs[i].key);
         assert(v && *v == pairs[i].value);
@@ -122,9 +111,9 @@ static void benchmarks() {
     })
     hashmap_free(map);
 
+    // benchmark ops with capacity set
     options.capacity = N;
     map = hashmap_create(&options);
-    shuffle(pairs, N, sizeof(struct key_value_pairs));
     bench("set (cap)", N, {
         const bool res = hashmap_set(map, pairs[i].key, &pairs[i].value);
         assert(res == true);
@@ -141,12 +130,7 @@ static void benchmarks() {
 
     hashmap_free(map);
 
-    for (int i = 0; i < N; i++) {
-        xfree(pairs[i].key);
-    }
-
     xfree(pairs);
-
 
     if (total_allocs != 0) {
         fprintf(stderr, "total_allocs: expected 0, got %lu\n", total_allocs);

@@ -12,7 +12,7 @@ struct hashmap_create_options {
     // All values must be of this size.
     size_t value_size;
 
-    // Optional: initial capacity of the hashmap. The hashmap wont shrink until it reaches this size.
+    // Optional: initial capacity of the hashmap.
     // If 0, the hashmap will start with a default capacity of 32.
     size_t capacity;
 

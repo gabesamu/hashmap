@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "../include/hashmap.h"
 
@@ -55,6 +56,7 @@ struct hashmap {
     size_t num_buckets;
     size_t num_elements;
     void *temp_bucket;
+    void *insertion_bucket;
 };
 
 static struct bucket* get_bucket(const struct hashmap *map, size_t index) {
@@ -104,16 +106,16 @@ struct hashmap *hashmap_create(const struct hashmap_create_options *options) {
 
     size_t bucket_size = sizeof(struct bucket) + options->value_size;
 
-
     // Align bucket size to the word size of the machine
     while (bucket_size & (sizeof(uintptr_t) - 1)) {
         bucket_size++;
     }
 
-    struct hashmap *map = malloc(sizeof(struct hashmap) + bucket_size);
+    struct hashmap *map = malloc(sizeof(struct hashmap) + bucket_size*2);
     if (!map) {
         return NULL;
     }
+    memset(map, 0, sizeof(struct hashmap));
 
     size_t cap = HASHMAP_DEFAULT_CAPACITY;
     while (cap < options->capacity) {
@@ -125,6 +127,7 @@ struct hashmap *hashmap_create(const struct hashmap_create_options *options) {
         free(map);
         return NULL;
     }
+    memset(map->buckets, 0, bucket_size * cap);
 
     map->value_size = options->value_size;
     map->capacity = cap;
@@ -135,8 +138,9 @@ struct hashmap *hashmap_create(const struct hashmap_create_options *options) {
     map->bucket_size = bucket_size;
     map->num_buckets = cap;
     map->temp_bucket = ((char *)map) + sizeof(struct hashmap);
-    map->grow_at = cap * HASHMAP_MAX_LOAD_FACTOR;
-    map->shrink_at = cap * HASHMAP_MIN_LOAD_FACTOR;
+    map->insertion_bucket = ((char *)map) + sizeof(struct hashmap) + bucket_size;
+    map->grow_at = map->num_buckets * HASHMAP_MAX_LOAD_FACTOR;
+    map->shrink_at = map->num_buckets * HASHMAP_MIN_LOAD_FACTOR;
 
     return map;
 }
@@ -160,7 +164,6 @@ static bool resize(struct hashmap *map, size_t new_capacity) {
 
         src->probe_len = 0;
         size_t dst_idx = src->hash & (temp_map->num_buckets - 1);
-
         while(true) {
             dst = get_bucket(temp_map, dst_idx);
             if (!dst->hash) {
@@ -181,30 +184,32 @@ static bool resize(struct hashmap *map, size_t new_capacity) {
 
     free(map->buckets);
     map->buckets = temp_map->buckets;
-    map->capacity = temp_map->capacity;
+    map->num_buckets = temp_map->num_buckets;
     map->grow_at = temp_map->grow_at;
     map->shrink_at = temp_map->shrink_at;
-
     free(temp_map);
+
     return true;
 }
 
 bool hashmap_set(struct hashmap *map, const char *key, const void *value) {
     uint64_t hash = map->key_hash(key, strlen(key), map->seed1, map->seed2);
+    // printf("hash: %llu\n", hash);
+
 
     if (map->num_elements >= map->grow_at) {
-        if (!resize(map, map->capacity * 2)) {
+        if (!resize(map, map->num_buckets * 2)) {
             return false;
         }
     }
 
-    struct bucket *src = map->temp_bucket;
+    struct bucket *src = map->insertion_bucket;
     src->hash = hash;
     src->probe_len = 0;
     set_key(src, key);
     memcpy(get_value(src), value, map->value_size);
 
-    size_t idx = hash & (map->num_buckets - 1);
+    size_t idx = src->hash & (map->num_buckets - 1);
 
     while (true) {
         struct bucket *dst = get_bucket(map, idx);
@@ -214,7 +219,7 @@ bool hashmap_set(struct hashmap *map, const char *key, const void *value) {
             return true;
         }
 
-        if (dst->hash == hash && strcmp(get_key(dst), key) == 0) {
+        if (dst->hash == src->hash && strcmp(get_key(dst), get_key(src)) == 0) {
             memcpy(get_value(dst), value, map->value_size);
             return true;
         }
@@ -231,12 +236,16 @@ bool hashmap_set(struct hashmap *map, const char *key, const void *value) {
 }
 
 const void *hashmap_get(const struct hashmap *map, const char *key) {
+    // printf("key: %s\n", key);
     uint64_t hash = map->key_hash(key, strlen(key), map->seed1, map->seed2);
     size_t idx = hash & (map->num_buckets - 1);
+    // printf("hash: %llu\n", hash);
+    // printf("idx: %d\n", idx);
 
     while (true) {
         struct bucket *bucket = get_bucket(map, idx);
         if (!bucket->hash) {
+            printf("not found\n");
             return NULL;
         }
 
@@ -278,8 +287,8 @@ bool hashmap_remove(struct hashmap *map, const char *key) {
                 bucket = next_bucket;
             }
 
-            if (map->num_elements <= map->shrink_at && map->capacity > HASHMAP_DEFAULT_CAPACITY) {
-                resize(map, map->capacity / 2);
+            if (map->num_elements <= map->shrink_at && map->num_buckets > HASHMAP_DEFAULT_CAPACITY) {
+                resize(map, map->num_buckets / 2);
             }
 
             return true;
