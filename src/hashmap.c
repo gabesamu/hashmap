@@ -100,6 +100,15 @@ static void free_values(struct hashmap *map) {
     }
 }
 
+static void free_keys(struct hashmap *map) {
+    for (size_t i = 0; i < map->num_buckets; i++) {
+        struct bucket *bucket = get_bucket(map, i);
+        if (bucket->hash && bucket->is_key_ptr) {
+            map->free(bucket->key.key_ptr);
+        }
+    }
+}
+
 void hashmap_set_seeds(struct hashmap *map, uint64_t seed1, uint64_t seed2) {
     map->seed1 = seed1;
     map->seed2 = seed2;
@@ -297,6 +306,11 @@ bool hashmap_remove(struct hashmap *map, const char *key) {
             bucket->hash = 0;
             map->num_elements--;
 
+            if (bucket->is_key_ptr) {
+                bucket->is_key_ptr = false;
+                map->free(bucket->key.key_ptr);
+            }
+
             while (true) {
                 size_t next_idx = (idx + 1) & (map->num_buckets - 1);
                 struct bucket *next_bucket = get_bucket(map, next_idx);
@@ -329,6 +343,7 @@ void hashmap_free(struct hashmap *map) {
         return;
     }
     free_values(map);
+    free_keys(map);
     map->free(map->buckets);
     map->free(map);
 }
