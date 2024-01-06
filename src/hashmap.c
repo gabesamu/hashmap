@@ -177,7 +177,7 @@ static bool resize(struct hashmap *map, size_t new_capacity) {
         .custom_free = map->free,
     };
 
-    struct hashmap *temp_map = hashmap_create(&options);
+    struct hashmap *temp_map = hashmap_create_with_options(&options);
     if (!temp_map) return false;
 
     struct bucket *src, *dst;
