@@ -29,7 +29,8 @@ struct hashmap_create_options {
 
 struct hashmap;
 
-struct hashmap *hashmap_create(const struct hashmap_create_options *options);
+struct hashmap *hashmap_create_with_options(const struct hashmap_create_options *options);
+struct hashmap *hashmap_create(size_t value_size);
 
 
 void hashmap_free(struct hashmap *map);

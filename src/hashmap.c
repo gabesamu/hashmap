@@ -105,7 +105,7 @@ void hashmap_set_seeds(struct hashmap *map, uint64_t seed1, uint64_t seed2) {
     map->seed2 = seed2;
 }
 
-struct hashmap *hashmap_create(const struct hashmap_create_options *options) {
+struct hashmap *hashmap_create_with_options(const struct hashmap_create_options *options) {
 
     size_t bucket_size = sizeof(struct bucket) + options->value_size;
 
@@ -155,6 +155,18 @@ struct hashmap *hashmap_create(const struct hashmap_create_options *options) {
     map->shrink_at = map->num_buckets * HASHMAP_MIN_LOAD_FACTOR;
 
     return map;
+}
+
+struct hashmap *hashmap_create(size_t value_size) {
+    struct hashmap_create_options options = {
+        .value_size = value_size,
+        .capacity = 0,
+        .value_free = NULL,
+        .hash = NULL,
+        .custom_malloc = NULL,
+        .custom_free = NULL,
+    };
+    return hashmap_create_with_options(&options);
 }
 
 static bool resize(struct hashmap *map, size_t new_capacity) {

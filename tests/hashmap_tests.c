@@ -64,7 +64,7 @@ static void test_free(void *ptr) {
 
 static void benchmarks() {
     int seed = getenv("SEED")?atoi(getenv("SEED")):time(NULL);
-    int N = 1000000;
+    int N = 5000000;
     srand(seed);
 
     struct key_value_pairs{
@@ -89,7 +89,7 @@ static void benchmarks() {
         .custom_malloc = test_malloc,
         .custom_free = test_free
     };
-    map = hashmap_create(&options);
+    map = hashmap_create_with_options(&options);
     // benchmark ops with default capacity
     bench("set", N, {
         const bool res = hashmap_set(map, pairs[i].key, &pairs[i].value);
@@ -107,7 +107,7 @@ static void benchmarks() {
 
     // benchmark ops with capacity set
     options.capacity = N;
-    map = hashmap_create(&options);
+    map = hashmap_create_with_options(&options);
     bench("set (cap)", N, {
         const bool res = hashmap_set(map, pairs[i].key, &pairs[i].value);
         assert(res == true);
