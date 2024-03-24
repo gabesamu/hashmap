@@ -229,8 +229,6 @@ static bool resize(struct hashmap *map, size_t new_capacity) {
 
 bool hashmap_set(struct hashmap *map, const char *key, const void *value) {
     uint64_t hash = map->key_hash(key, strlen(key), map->seed1, map->seed2);
-    // printf("hash: %llu\n", hash);
-
 
     if (map->num_elements >= map->grow_at) {
         if (!resize(map, map->num_buckets * 2)) {
@@ -271,11 +269,9 @@ bool hashmap_set(struct hashmap *map, const char *key, const void *value) {
 }
 
 const void *hashmap_get(const struct hashmap *map, const char *key) {
-    // printf("key: %s\n", key);
+
     uint64_t hash = map->key_hash(key, strlen(key), map->seed1, map->seed2);
     size_t idx = hash & (map->num_buckets - 1);
-    // printf("hash: %llu\n", hash);
-    // printf("idx: %d\n", idx);
 
     while (true) {
         struct bucket *bucket = get_bucket(map, idx);
